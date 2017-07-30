@@ -92,8 +92,8 @@ void     readMagData(int16_t * destination);
 int16_t  readTempData();
 void     initAK8963(float * destination);
 void     initMPU9250();
-void     accelgyrocalMPU9250(float * dest1, float * dest2);
-void     magcalMPU9250(float * dest1, float * dest2);
+void     calibrateAccelGyroMPU9250(float * localGyroBias, float * localAccBias);
+void     calibrateMagMPU9250(float * localMagBias, float * localMagScale);
 void     MPU9250SelfTest(float * destination);
 void     MS5637Reset();
 void     MS5637PromRead(uint16_t * destination);
@@ -102,8 +102,8 @@ unsigned char MS5637checkCRC(uint16_t * n_prom);
 void     writeByte(uint8_t address, uint8_t subAddress, uint8_t data);
 uint8_t  readByte(uint8_t address, uint8_t subAddress);
 void     readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest);
-void     MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz);
-void     MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz);
+void     MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float quaternion[]);
+void     MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float quaternion[]);
 
 // See also MPU-9250 Register Map and Descriptions, Revision 4.0, RM-MPU-9250A-00, Rev. 1.4, 9/9/2013 for registers not listed in
 // above document; the MPU9250 and MPU9150 are virtually identical but the latter has a different register map
@@ -111,6 +111,7 @@ void     MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy
 //Magnetometer Registers
 #define AK8963_ADDRESS   0x0C
 #define WHO_AM_I_AK8963  0x00 // should return 0x48
+#define WHO_AM_I_AK8963_VALUE  0x48 // value to be returned by the above
 #define INFO             0x01
 #define AK8963_ST1       0x02  // data ready status bit 0
 #define AK8963_XOUT_L	   0x03  // data
@@ -247,6 +248,8 @@ void     MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy
 #define FIFO_COUNTL      0x73
 #define FIFO_R_W         0x74
 #define WHO_AM_I_MPU9250 0x75 // Should return 0x71
+#define WHO_AM_I_MPU9250_VALUE 0x73 // to be returned by the above - for the GY9250 board I have
+// #define WHO_AM_I_MPU9250_VALUE 0x71 // to be returned by the above - deefault in the Kris Winer's code
 #define XA_OFFSET_H      0x77
 #define XA_OFFSET_L      0x78
 #define YA_OFFSET_H      0x7A
@@ -496,7 +499,8 @@ char* serialCommands[] = {
 	"formatInfo",
 	"version", //13
 	"calibrateAccGyro",
-  "calibrateMag" //15
+	"calibrateMag", //15
+	"oscPath"
 	/* "output" */
 };
 char* serialCommandsHints[] = { //careful to have these at proper indices in relation to serialCommands
@@ -515,7 +519,8 @@ char* serialCommandsHints[] = { //careful to have these at proper indices in rel
 	"list available format names",
 	"print version string",
 	"start calibration process for Accelerometer and Gyro; the accelerometer should be stable and perfectly flat",
-  "start calibration process for Magnetometer; it should be rotated along all axis"
+	"start calibration process for Magnetometer; it should be rotated along all axis"
+	"print osc path for the messages sent"
 };
 
 byte msgFormat[32];
@@ -579,6 +584,10 @@ void readAllSensors() {
 		ay = (float)MPU9250Data[1] * aRes - accelBias[1];
 		az = (float)MPU9250Data[2] * aRes - accelBias[2];
 
+		// ax = ((float)MPU9250Data[0] - accelBias[0]) * aRes;// ; // get actual g value, this depends on scale being set
+		// ay = ((float)MPU9250Data[1] - accelBias[1]) * aRes;// ;
+		// az = ((float)MPU9250Data[2] - accelBias[2]) * aRes;// ;
+
 		//   readGyroData(gyroCount);  // Read the x/y/z adc values
 
 		// Calculate the gyro value into actual degrees per second
@@ -624,9 +633,9 @@ void readAllSensors() {
 	// function to get North along the accel +x-axis, East along the accel -y-axis, and Down along the accel -z-axis.
 	// This orientation choice can be modified to allow any convenient (non-NED) orientation convention.
 	// Pass gyro rate as rad/s
-	MadgwickQuaternionUpdate(-ax, ay, az, gx * PI / 180.0f, -gy * PI / 180.0f, -gz * PI / 180.0f,  my,  -mx, mz);
-	//MadgwickQuaternionUpdate(-ax, ay, az, gx * PI / 180.0f, gy * PI / 180.0f, gz * PI / 180.0f,  my,  -mx, mz); //from another code... this seem to cause resetting yaw?
-	//  if(passThru)MahonyQuaternionUpdate(-ax, ay, az, gx*PI/180.0f, -gy*PI/180.0f, -gz*PI/180.0f,  my,  -mx, mz);
+	MadgwickQuaternionUpdate(-ax, ay, az, gx * PI / 180.0f, -gy * PI / 180.0f, -gz * PI / 180.0f,  my,  -mx, mz, q); //remember to pass quaternion!
+	//MadgwickQuaternionUpdate(-ax, ay, az, gx * PI / 180.0f, gy * PI / 180.0f, gz * PI / 180.0f,  my,  -mx, mz, q); //from another code... this seem to cause resetting yaw?
+	// MahonyQuaternionUpdate(-ax, ay, az, gx*PI/180.0f, -gy*PI/180.0f, -gz*PI/180.0f, my, -mx, mz, q);
 
 	// Serial print and/or display at 0.5 s rate independent of data rates
 	// delt_t = millis() - count;
@@ -873,22 +882,22 @@ void initMPU9250()
 
 // Function which accumulates gyro and accelerometer data after device initialization. It calculates the average
 // of the at-rest readings and then loads the resulting offsets into accelerometer and gyro bias registers.
-void accelgyrocalMPU9250(float * dest1, float * dest2)
+void calibrateAccelGyroMPU9250(float * localGyroBias, float * localAccBias)
 {
 	uint8_t data[12]; // data array to hold accelerometer and gyro x, y, z, data
 	uint16_t ii, packet_count, fifo_count;
 	int32_t gyro_bias[3]  = {0, 0, 0}, accel_bias[3] = {0, 0, 0};
 
-  Serial.println("Accelerometer/Gyro calibration: put device in a flat position!");
-  Serial.println("In 4s...");
-  delay(1000);
-  Serial.println("In 3s...");
-  delay(1000);
-  Serial.println("In 2s...");
-  delay(1000);
-  Serial.println("In 1s...");
-  delay(1000);
-  Serial.println("Calibration started...");
+	Serial.println("Accelerometer/Gyro calibration: put device in a flat position!");
+	Serial.println("In 4s...");
+	delay(1000);
+	Serial.println("In 3s...");
+	delay(1000);
+	Serial.println("In 2s...");
+	delay(1000);
+	Serial.println("In 1s...");
+	delay(1000);
+	Serial.println("Calibration started...");
 
 	// reset device
 	writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x80); // Write a one to bit 7 reset bit; toggle reset device
@@ -946,6 +955,13 @@ void accelgyrocalMPU9250(float * dest1, float * dest2)
 		gyro_bias[1]  += (int32_t) gyro_temp[1];
 		gyro_bias[2]  += (int32_t) gyro_temp[2];
 
+		Serial.print("accel_temp: ");
+		for (int i = 0; i < 3; i ++ ) {Serial.print(accel_temp[i]); Serial.print(" ");};
+		Serial.println("");
+		Serial.print("gyro_temp: ");
+		for (int i = 0; i < 3; i ++ ) {Serial.print(gyro_temp[i]); Serial.print(" ");};
+		Serial.println("");
+
 	}
 	accel_bias[0] /= (int32_t) packet_count; // Normalize sums to get average count biases
 	accel_bias[1] /= (int32_t) packet_count;
@@ -954,12 +970,25 @@ void accelgyrocalMPU9250(float * dest1, float * dest2)
 	gyro_bias[1]  /= (int32_t) packet_count;
 	gyro_bias[2]  /= (int32_t) packet_count;
 
+	Serial.print("accel_bias before removing gravity: ");
+	for (int i = 0; i < 3; i ++ ) {
+		Serial.print(accel_bias[i]);
+		Serial.print(" ");
+	};
+	Serial.println("");
+
 	if (accel_bias[2] > 0L) {
 		accel_bias[2] -= (int32_t) accelsensitivity; // Remove gravity from the z-axis accelerometer bias calculation
 	}
 	else {
 		accel_bias[2] += (int32_t) accelsensitivity;
 	}
+
+	Serial.print("accel_bias after removing gravity: "); 	for (int i = 0; i < 3; i ++ ) {
+		Serial.print(accel_bias[i]);
+		Serial.print(" ");
+	};
+	Serial.println("");
 
 	// Construct the gyro biases for push to the hardware gyro bias registers, which are reset to zero upon device startup
 	data[0] = (-gyro_bias[0] / 4  >> 8) & 0xFF; // Divide by 4 to get 32.9 LSB per deg/s to conform to expected bias input format
@@ -978,9 +1007,9 @@ void accelgyrocalMPU9250(float * dest1, float * dest2)
 	writeByte(MPU9250_ADDRESS, ZG_OFFSET_L, data[5]);
 
 	// Output scaled gyro biases for display in the main program
-	dest1[0] = (float) gyro_bias[0] / (float) gyrosensitivity;
-	dest1[1] = (float) gyro_bias[1] / (float) gyrosensitivity;
-	dest1[2] = (float) gyro_bias[2] / (float) gyrosensitivity;
+	localGyroBias[0] = (float) gyro_bias[0] / (float) gyrosensitivity;
+	localGyroBias[1] = (float) gyro_bias[1] / (float) gyrosensitivity;
+	localGyroBias[2] = (float) gyro_bias[2] / (float) gyrosensitivity;
 
 	// Construct the accelerometer biases for push to the hardware accelerometer bias registers. These registers contain
 	// factory trim values which must be added to the calculated accelerometer biases; on boot up these registers will hold
@@ -1029,36 +1058,36 @@ void accelgyrocalMPU9250(float * dest1, float * dest2)
 	writeByte(MPU9250_ADDRESS, ZA_OFFSET_L, data[5]);
 	*/
 	// Output scaled accelerometer biases for display in the main program
-	dest2[0] = (float)accel_bias[0] / (float)accelsensitivity;
-	dest2[1] = (float)accel_bias[1] / (float)accelsensitivity;
-	dest2[2] = (float)accel_bias[2] / (float)accelsensitivity;
+	localAccBias[0] = (float)accel_bias[0] / (float)accelsensitivity;
+	localAccBias[1] = (float)accel_bias[1] / (float)accelsensitivity;
+	localAccBias[2] = (float)accel_bias[2] / (float)accelsensitivity;
 
-  Serial.println("Calibration done.");
+	Serial.println("Calibration done.");
 
-  Serial.println("accel biases (mg)"); Serial.println(1000.*dest1[0]); Serial.println(1000.*dest1[1]); Serial.println(1000.*dest1[2]);
-  Serial.println("gyro biases (dps)"); Serial.println(dest2[0]); Serial.println(dest2[1]); Serial.println(dest2[2]);
+	Serial.println("accel biases (mg)"); Serial.println(1000.*localGyroBias[0]); Serial.println(1000.*localGyroBias[1]); Serial.println(1000.*localGyroBias[2]);
+	Serial.println("gyro biases (dps)"); Serial.println(localAccBias[0]); Serial.println(localAccBias[1]); Serial.println(localAccBias[2]);
 
-  //write to EEPROM
-  writeAccelBias(dest1);
-  writeGyroBias(dest2);
+	//write to EEPROM
+	writeAccelBias(localAccBias);
+	writeGyroBias(localGyroBias);
 }
 
 
-void magcalMPU9250(float * dest1, float * dest2)
+void calibrateMagMPU9250(float * localMagBias, float * localMagScale)
 {
 	uint16_t ii = 0, sample_count = 0;
 	int32_t mag_bias[3] = {0, 0, 0}, mag_scale[3] = {0, 0, 0};
 	int16_t mag_max[3] = { -32767, -32767, -32767}, mag_min[3] = {32767, 32767, 32767}, mag_temp[3] = {0, 0, 0};
 
 	Serial.println("Mag Calibration: Wave device in a figure eight until done!");
-  Serial.println("In 4s...");
-  delay(1000);
-  Serial.println("In 3s...");
-  delay(1000);
-  Serial.println("In 2s...");
-  delay(1000);
-  Serial.println("In 1s...");
-  delay(1000);
+	Serial.println("In 4s...");
+	delay(1000);
+	Serial.println("In 3s...");
+	delay(1000);
+	Serial.println("In 2s...");
+	delay(1000);
+	Serial.println("In 1s...");
+	delay(1000);
 	Serial.println("Calibration started...");
 
 	// shoot for ~fifteen seconds of mag data
@@ -1074,18 +1103,18 @@ void magcalMPU9250(float * dest1, float * dest2)
 		if (Mmode == 0x06) delay(12); // at 100 Hz ODR, new mag data is available every 10 ms
 	}
 
-  Serial.println("mag x min/max:"); Serial.println(mag_max[0]); Serial.println(mag_min[0]);
-  Serial.println("mag y min/max:"); Serial.println(mag_max[1]); Serial.println(mag_min[1]);
-  Serial.println("mag z min/max:"); Serial.println(mag_max[2]); Serial.println(mag_min[2]);
+	Serial.println("mag x min/max:"); Serial.println(mag_max[0]); Serial.println(mag_min[0]);
+	Serial.println("mag y min/max:"); Serial.println(mag_max[1]); Serial.println(mag_min[1]);
+	Serial.println("mag z min/max:"); Serial.println(mag_max[2]); Serial.println(mag_min[2]);
 
 	// Get hard iron correction
 	mag_bias[0]  = (mag_max[0] + mag_min[0]) / 2; // get average x mag bias in counts
 	mag_bias[1]  = (mag_max[1] + mag_min[1]) / 2; // get average y mag bias in counts
 	mag_bias[2]  = (mag_max[2] + mag_min[2]) / 2; // get average z mag bias in counts
 
-	dest1[0] = (float) mag_bias[0] * mRes * magCalibration[0]; // save mag biases in G for main program
-	dest1[1] = (float) mag_bias[1] * mRes * magCalibration[1];
-	dest1[2] = (float) mag_bias[2] * mRes * magCalibration[2];
+	localMagBias[0] = (float) mag_bias[0] * mRes * magCalibration[0]; // save mag biases in G for main program
+	localMagBias[1] = (float) mag_bias[1] * mRes * magCalibration[1];
+	localMagBias[2] = (float) mag_bias[2] * mRes * magCalibration[2];
 
 	// Get soft iron correction estimate
 	mag_scale[0]  = (mag_max[0] - mag_min[0]) / 2; // get average x axis max chord length in counts
@@ -1095,18 +1124,35 @@ void magcalMPU9250(float * dest1, float * dest2)
 	float avg_rad = mag_scale[0] + mag_scale[1] + mag_scale[2];
 	avg_rad /= 3.0;
 
-	dest2[0] = avg_rad / ((float)mag_scale[0]);
-	dest2[1] = avg_rad / ((float)mag_scale[1]);
-	dest2[2] = avg_rad / ((float)mag_scale[2]);
+	localMagScale[0] = avg_rad / ((float)mag_scale[0]);
+	localMagScale[1] = avg_rad / ((float)mag_scale[1]);
+	localMagScale[2] = avg_rad / ((float)mag_scale[2]);
 
 	Serial.println("Mag Calibration done!");
 
-  //write EEPROM
-  writeMagBias(dest1);
-  writeMagScale(dest2);
+	//write EEPROM
+	writeMagBias(localMagBias);
+	writeMagScale(localMagScale);
 }
 
+void printAccGyroBiases(){
+	Serial.println("accel biases (mg)"); Serial.println(1000.*accelBias[0]); Serial.println(1000.*accelBias[1]); Serial.println(1000.*accelBias[2]);
+	Serial.println("gyro biases (dps)");
+	Serial.println(gyroBias[0]);
+	Serial.println(gyroBias[1]);
+	Serial.println(gyroBias[2]);
+}
 
+void printMagBiases(){
+	Serial.println("AK8963 mag biases (mG)");
+	Serial.println(magBias[0]);
+	Serial.println(magBias[1]);
+	Serial.println(magBias[2]);
+	Serial.println("AK8963 mag scale (mG)");
+	Serial.println(magScale[0]);
+	Serial.println(magScale[1]);
+	Serial.println(magScale[2]);
+}
 
 // Accelerometer and gyroscope self test; check calibration wrt factory settings
 void MPU9250SelfTest(float * destination) // Should return percent deviation from factory trim values, +/- 14 or less deviation is a pass
@@ -1429,6 +1475,10 @@ void processSerialCommand() {
 		case 15: //calibrate
 		Serial.println("Starting calibration for magnetometer!");
 		isCalibratingMag = true;
+		break;
+		case 16: //sensorPath
+		Serial.print("OSC path for messages sent: ");
+		Serial.println(sensorPath);
 		break;
 		default:
 		Serial.print("Received unknown command: ");
@@ -1971,7 +2021,7 @@ void updateStatus() {
 	/* Serial.println("%)"); */
 	if (serialStatus) {
 		printStatusNoRead(voltage, percentage);
-    // printStatusNoRead();
+		// printStatusNoRead();
 	}
 
 	msgCounter = 0; //resent msgCounter
@@ -1986,7 +2036,7 @@ void printStatus() {
 	Serial.print("V (");
 	Serial.print(percentage);
 	Serial.print("%), ");
-  // Serial.print(msgCounter);
+	// Serial.print(msgCounter);
 	Serial.print(sendRate);
 	// Serial.println(" messages");
 	Serial.print(" messages; sensor read rate: ");
@@ -1996,7 +2046,7 @@ void printStatus() {
 }
 
 void printStatusNoRead(float voltage, int percentage) {
-// void printStatusNoRead() {
+	// void printStatusNoRead() {
 	Serial.print(statusPath + " ");
 	Serial.print(voltage);
 	Serial.print("V (");
@@ -2279,11 +2329,24 @@ void readMsgFormat() {
 void readAccelBias() {
 	// Serial.println("reading offsets");
 	readEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize, sizeof(accelBias) / sizeof(float), accelBias);//offsets
-	if((accelBias[0] != accelBias[0]) && (accelBias[1] != accelBias[1]) && (accelBias[2] != accelBias[2])) {
-		Serial.println("accelBias values seem to not have been previously written, initializing to {0,0,0}");
-		for(int i = 0; i < (sizeof(accelBias)/sizeof(float)); i++) {
+	// if((accelBias[0] != accelBias[0]) && (accelBias[1] != accelBias[1]) && (accelBias[2] != accelBias[2])) {
+	// 	Serial.println("accelBias values seem to not have been previously written, initializing to {0,0,0}");
+	// 	for(int i = 0; i < (sizeof(accelBias)/sizeof(float)); i++) {
+	// 		accelBias[i] = 0;
+	// 	};
+	// 	writeAccelBias(accelBias);
+	bool needsInitialization = false;
+	for(int i = 0; i < (sizeof(accelBias)/sizeof(float)); i++) {
+		if(accelBias[i] != accelBias[i]) {
 			accelBias[i] = 0;
+			needsInitialization = true;
 		};
+		// Serial.printf("%d ", soffsets[i]);
+		// Serial.print(magBias[i]);
+		// Serial.print(" ");
+	};
+	if(needsInitialization) {
+		Serial.println("accelBias values seem to not have been previously written, initializing to {0,0,0}");
 		writeAccelBias(accelBias);
 	} else {
 		//and set
@@ -2301,12 +2364,25 @@ void readAccelBias() {
 void readGyroBias() {
 	// Serial.println("reading offsets");
 	readEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize + accBiasSize, sizeof(gyroBias) / sizeof(float), gyroBias);//offsets
-	if((gyroBias[0] == NAN) && (gyroBias[0] == NAN) && (gyroBias[0] == NAN)) {
-		Serial.println("gyroBias values seem to not have been previously written, initializing to {0,0,0}");
-		for(int i = 0; i < (sizeof(gyroBias)/sizeof(float)); i++) {
+	// if((gyroBias[0] == NAN) && (gyroBias[0] == NAN) && (gyroBias[0] == NAN)) {
+	// 	Serial.println("gyroBias values seem to not have been previously written, initializing to {0,0,0}");
+	// 	for(int i = 0; i < (sizeof(gyroBias)/sizeof(float)); i++) {
+	// 		gyroBias[i] = 0;
+	// 	};
+	// 	writeGyroBias(gyroBias);
+	bool needsInitialization = false;
+	for(int i = 0; i < (sizeof(gyroBias)/sizeof(float)); i++) {
+		if(gyroBias[i] != gyroBias[i]) {
 			gyroBias[i] = 0;
+			needsInitialization = true;
 		};
-		writeAccelBias(gyroBias);
+		// Serial.printf("%d ", soffsets[i]);
+		// Serial.print(magBias[i]);
+		// Serial.print(" ");
+	};
+	if(needsInitialization) {
+		Serial.println("gyroBias values seem to not have been previously written, initializing to {0,0,0}");
+		writeGyroBias(gyroBias);
 	} else {
 		//and set
 		Serial.print("gyroBias values read: ");
@@ -2323,12 +2399,19 @@ void readGyroBias() {
 void readMagBias() {
 	// Serial.println("reading offsets");
 	readEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize + accBiasSize + gyroBiasSize, sizeof(magBias) / sizeof(float), magBias);//offsets
-	if((magBias[0] == NAN) && (magBias[0] == NAN) && (magBias[0] == NAN)) {
-		Serial.println("magBias values seem to not have been previously written, initializing to {0,0,0}");
-		for(int i = 0; i < (sizeof(magBias)/sizeof(float)); i++) {
+	bool needsInitialization = false;
+	for(int i = 0; i < (sizeof(magBias)/sizeof(float)); i++) {
+		if(magBias[i] != magBias[i]) {
 			magBias[i] = 0;
+			needsInitialization = true;
 		};
-		writeAccelBias(magBias);
+		// Serial.printf("%d ", soffsets[i]);
+		// Serial.print(magBias[i]);
+		// Serial.print(" ");
+	};
+	if(needsInitialization) {
+		Serial.println("magBias values seem to not have been previously written, initializing to {0,0,0}");
+		writeMagBias(magBias);
 	} else {
 		//and set
 		Serial.print("magBias values read: ");
@@ -2345,12 +2428,26 @@ void readMagBias() {
 void readMagScale() {
 	// Serial.println("reading offsets");
 	readEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize + accBiasSize + gyroBiasSize + magBiasSize, sizeof(magScale) / sizeof(float), magScale);//offsets
-	if((magScale[0] == NAN) && (magScale[0] == NAN) && (magScale[0] == NAN)) {
-		Serial.println("magScale values seem to not have been previously written, initializing to {0,0,0}");
-		for(int i = 0; i < (sizeof(magScale)/sizeof(float)); i++) {
+	// if((magScale[0] == NAN) && (magScale[0] == NAN) && (magScale[0] == NAN)) {
+	// 	Serial.println("magScale values seem to not have been previously written, initializing to {0,0,0}");
+	// 	for(int i = 0; i < (sizeof(magScale)/sizeof(float)); i++) {
+	// 		magScale[i] = 0;
+	// 	};
+	// 	writeMagScale(magScale);
+	//
+	bool needsInitialization = false;
+	for(int i = 0; i < (sizeof(magScale)/sizeof(float)); i++) {
+		if(magScale[i] != magScale[i]) {
 			magScale[i] = 0;
+			needsInitialization = true;
 		};
-		writeAccelBias(magScale);
+		// Serial.printf("%d ", soffsets[i]);
+		// Serial.print(magBias[i]);
+		// Serial.print(" ");
+	};
+	if(needsInitialization) {
+		Serial.println("magScale values seem to not have been previously written, initializing to {0,0,0}");
+		writeMagScale(magScale);
 	} else {
 		//and set
 		Serial.print("magScale values read: ");
@@ -2443,22 +2540,26 @@ void writeMsgFormat() {
 // 	EEPROM.commit();
 // }
 void writeAccelBias(float newBias[3]) {
-	writeEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize, sizeof(accelBias) / sizeof(int), newBias); //using global var for offsets to get proper size
+	writeEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize, sizeof(accelBias) / sizeof(float), newBias); //using global var for offsets to get proper size
+	// for(int i = 0; i < (sizeof(accelBias)/sizeof(float)); i++) {
+	// 				Serial.println(accelBias[i]);// = 0;
+	// 				Serial.println(newBias[i]);// = 0;
+	// };
 	EEPROM.commit();
 }
 
 void writeGyroBias(float newBias[3]) {
-	writeEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize + accBiasSize, sizeof(gyroBias) / sizeof(int), newBias); //using global var for offsets to get proper size
+	writeEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize + accBiasSize, sizeof(gyroBias) / sizeof(float), newBias); //using global var for offsets to get proper size
 	EEPROM.commit();
 }
 
 void writeMagBias(float newBias[3]) {
-	writeEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize + accBiasSize + gyroBiasSize, sizeof(magBias) / sizeof(int), newBias); //using global var for offsets to get proper size
+	writeEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize + accBiasSize + gyroBiasSize, sizeof(magBias) / sizeof(float), newBias); //using global var for offsets to get proper size
 	EEPROM.commit();
 }
 
 void writeMagScale(float newScale[3]) {
-	writeEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize + accBiasSize + gyroBiasSize + magBiasSize, sizeof(magScale) / sizeof(int), newScale); //using global var for offsets to get proper size
+	writeEEPROMfloatArr(ssidSize + pwdSize + nameSize + destIpSize + destPortSize + msgFormatEepromSize + numUsedMessagesSize + accBiasSize + gyroBiasSize + magBiasSize, sizeof(magScale) / sizeof(float), newScale); //using global var for offsets to get proper size
 	EEPROM.commit();
 }
 
@@ -2548,10 +2649,10 @@ void writeEEPROMfloatArr(int start, int len, float arr[]) {
 		Serial.print(", value ");
 		Serial.println(arr[i]);
 		// writeEEPROMint(start + (i * sizeof(int)), arr[i]);
-    // writeEEPROMfloat(start + (i * sizeof(float)), arr[i]);
-    EEPROM.put(start + (i * sizeof(float)), arr[i]);
+		// writeEEPROMfloat(start + (i * sizeof(float)), arr[i]);
+		EEPROM.put(start + (i * sizeof(float)), arr[i]);
 	}
-  EEPROM.commit();
+	EEPROM.commit();
 	/* return; */
 }
 
@@ -2593,7 +2694,7 @@ void readEEPROMfloatArr(int start, int len, float arr[]) { //as array to read to
 		// Serial.print(", value ");
 		// arr[i] = readEEPROMint(start + (i * sizeof(int))); //<<<THIS DIDN'T WORK FOR SOME REASON
 		// arr[i] = (float)readEEPROMlong(start + (i * sizeof(float)));
-    EEPROM.get(start + (i * sizeof(float)), arr[i]);
+		EEPROM.get(start + (i * sizeof(float)), arr[i]);
 
 		// Serial.println(arr[i]);
 	}
@@ -2737,27 +2838,6 @@ String macToStr(const uint8_t* mac)
 
 //calibration, from IMU Zero example
 
-void ForceHeader()
-{ LinesOut = 99; }
-
-
-void runCalibration(){
-	// for (int i = iAx; i <= iGz; i++)
-	// { // set targets and initial guesses
-	//   Target[i] = 0; // must fix for ZAccel
-	//   HighOffset[i] = 0;
-	//   LowOffset[i] = 0;
-	// } // set targets and initial guesses
-	// Target[iAz] = 16384;
-	// SetAveraging(NFast);
-	//
-	// PullBracketsOut();
-	// PullBracketsIn(); //this should also write to eeprom
-	//
-	// Serial.println("------ calibration done ------");
-	// isCalibrating = false; //exit calibration
-}
-
 
 void setup() {
 	//setup
@@ -2766,13 +2846,13 @@ void setup() {
 	WiFi.macAddress(mac);    //get  MAC address
 	macStr = macToStr(mac);  //convert to string
 
-	delay(100);
+	delay(200);
 
 	Serial.println("");
 	Serial.println("");
 	Serial.println("Starting up...");
 
-	delay(100);
+	// delay(200);
 
 	Serial.println("Reading settings... ");
 	ssid = readSSID();
@@ -2784,6 +2864,7 @@ void setup() {
 	readIP(); //this sets destIP
 	destPort = readPort();
 	readMsgFormat();
+	delay(200);
 	// readOffsets();
 	readAccelBias();
 	readGyroBias();
@@ -2792,14 +2873,15 @@ void setup() {
 	Serial.println("finished.");
 	Serial.println("");
 
-	delay(100);
+	delay(200);
 
 	Serial.print("Device name: ");
 	Serial.println(devName);
 	Serial.print("Battery voltage: ");
 	Serial.println(readVoltage());
-  Serial.print("Message send rate: ");
-	Serial.println(1000000L / sendRateInverse);
+	Serial.print("Message send rate: ");
+	Serial.print(1000000L / sendRateInverse);
+	Serial.println("Hz");
 
 	/* setMessageFormat("accgyro b1 counter");//temp */
 	sendCurrentMsgFormat();
@@ -2818,28 +2900,21 @@ void setup() {
 		pinMode(allButtonPins[i], INPUT_PULLUP);
 	}
 
-	// join I2C bus (I2Cdev library doesn't do this automatically)
-	/* #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE */
-
-	/* #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE */
-	/* Fastwire::setup(400, true); */
-	/* #endif */
-
 	// initialize accelerometer device
 	Serial.println("Initializing I2C devices");
 	Wire.setClock(400000);//speed up I2C
 	Wire.begin(2, 4); //define which pins are used for I2C: Wire.begin(int sda, int scl)
-	// mpu.initialize();
 
 	// I2Cscan();// look for I2C devices on the bus
 
 	// verify connection
 	Serial.println(F("Testing device connections..."));
-	// Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
-	byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
-	Serial.print("MPU9250 "); Serial.print("I AM "); Serial.print(c, HEX); Serial.print(" I should be "); Serial.println(0x71, HEX);
 
-	if (c == 0x73) // WHO_AM_I should always be 0x68 - Marcin: changed to 0x73
+	byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
+	// Serial.print("MPU9250 "); Serial.print("I AM "); Serial.print(c, HEX); Serial.print(" I should be "); Serial.println(0x71, HEX);
+	Serial.print("MPU9250 "); Serial.print("I AM "); Serial.print(c, HEX); Serial.print(" I should be "); Serial.println(WHO_AM_I_MPU9250_VALUE, HEX);
+
+	if (c == WHO_AM_I_MPU9250_VALUE) // WHO_AM_I should always be 0x68 - Marcin: changed to 0x73
 	{
 		Serial.println("MPU9250 is online...");
 
@@ -2858,11 +2933,10 @@ void setup() {
 		getMres();
 
 		// Serial.println(" Calibrate gyro and accel");
-		// accelgyrocalMPU9250(gyroBias, accelBias); // Calibrate gyro and accelerometers, load biases in bias registers
-		// Serial.println("accel biases (mg)"); Serial.println(1000.*accelBias[0]); Serial.println(1000.*accelBias[1]); Serial.println(1000.*accelBias[2]);
-		// Serial.println("gyro biases (dps)"); Serial.println(gyroBias[0]); Serial.println(gyroBias[1]); Serial.println(gyroBias[2]);
+		// calibrateAccelGyroMPU9250(gyroBias, accelBias); // Calibrate gyro and accelerometers, load biases in bias registers
+		printAccGyroBiases();
 
-		// delay(1000);
+		delay(100);
 
 		initMPU9250();
 		Serial.println("MPU9250 initialized for active data mode...."); // Initialize device for active mode read of acclerometer, gyroscope, and temperature
@@ -2876,9 +2950,8 @@ void setup() {
 		// Get magnetometer calibration from AK8963 ROM
 		initAK8963(magCalibration); Serial.println("AK8963 initialized for active data mode...."); // Initialize device for active mode read of magnetometer
 
-		// magcalMPU9250(magBias, magScale);
-		// Serial.println("AK8963 mag biases (mG)"); Serial.println(magBias[0]); Serial.println(magBias[1]); Serial.println(magBias[2]);
-		// Serial.println("AK8963 mag scale (mG)"); Serial.println(magScale[0]); Serial.println(magScale[1]); Serial.println(magScale[2]);
+		// calibrateMagMPU9250(magBias, magScale);
+		printMagBiases();
 		// delay(2000); // add delay to see results before serial spew of data
 
 		//    if (SerialDebug) {
@@ -2895,8 +2968,14 @@ void setup() {
 	{
 		Serial.print("Could not connect to MPU9250: 0x");
 		Serial.println(c, HEX);
-		while (1) ; // Loop forever if communication doesn't happen CHANGEME
+		while (1) {
+			delay(1000);
+			Serial.print("Could not connect to MPU9250: 0x");
+			Serial.println(c, HEX);
+		}; // Loop forever if communication doesn't happen CHANGEME
 	}
+
+	delay(200);
 
 	//trigger
 	// updateTrigger.attach(1, sendStatusUpdate);
@@ -2914,11 +2993,21 @@ void loop() {
 	};
 	if(isCalibratingAccGyro){
 		// runCalibration();
-		accelgyrocalMPU9250(gyroBias, accelBias);
+		detachInterrupt(intPin);  // detach
+		calibrateAccelGyroMPU9250(gyroBias, accelBias);
+		printAccGyroBiases();
+		Serial.println("=== you may need to restart the device now ===");
+		attachInterrupt(intPin, myinthandler, RISING);  // define interrupt
 		isCalibratingAccGyro = false;
+		return;
 	} else if (isCalibratingMag) {
-		magcalMPU9250(magBias, magScale);
+		detachInterrupt(intPin);  // detach
+		calibrateMagMPU9250(magBias, magScale);
+		printMagBiases();
+		Serial.println("=== you may need to restart the device now ===");
+		attachInterrupt(intPin, myinthandler, RISING);  // define interrupt
 		isCalibratingMag = false;
+		return;
 	} else {
 		if (apMode) {
 			dnsServer.processNextRequest();
@@ -2935,12 +3024,12 @@ void loop() {
 				sendNow = micros();
 				if((sendNow - sendLast) > sendRateInverse) {
 					sendSensors();
-          sendCount ++;
-          if((sendNow - sendLastSecond) > 10000000L) {
-            readRate = sendCount;
-            sendLastSecond = sendNow;
-            sendCount = 0;
-          }
+					sendCount ++;
+					if((sendNow - sendLastSecond) > 1000000L) {
+						sendRate = sendCount;
+						sendLastSecond = sendNow;
+						sendCount = 0;
+					}
 					sendLast = sendNow;
 				}
 				if((sendNow - statusSendLast) > statusSendRateInverse) {
