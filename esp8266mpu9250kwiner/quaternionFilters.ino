@@ -5,7 +5,7 @@
 // The performance of the orientation filter is at least as good as conventional Kalman-based filtering algorithms
 // but is much less computationally intensive---it can be performed on a 3.3 V Pro Mini operating at 8 MHz!
 // Marcin: I changed Kris' function passing quaternion array instead of using a global variable
-void MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float quaternion[])
+void MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float quaternion[], float deltaTime)
 {
   // float q1 = q[0], q2 = q[1], q3 = q[2], q4 = q[3];   // short name local variable for readability
   float q1 = quaternion[0], q2 = quaternion[1], q3 = quaternion[2], q4 = quaternion[3];   // short name local variable for readability; uses passed in array
@@ -85,10 +85,15 @@ void MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy, 
   qDot4 = 0.5f * (q1 * gz + q2 * gy - q3 * gx) - beta * s4;
 
   // Integrate to yield quaternion
-  q1 += qDot1 * deltat;
-  q2 += qDot2 * deltat;
-  q3 += qDot3 * deltat;
-  q4 += qDot4 * deltat;
+//  q1 += qDot1 * deltat;
+//  q2 += qDot2 * deltat;
+//  q3 += qDot3 * deltat;
+//  q4 += qDot4 * deltat;
+q1 += qDot1 * deltaTime;
+  q2 += qDot2 * deltaTime;
+  q3 += qDot3 * deltaTime;
+  q4 += qDot4 * deltaTime;
+  
   norm = sqrtf(q1 * q1 + q2 * q2 + q3 * q3 + q4 * q4);    // normalise quaternion
   norm = 1.0f/norm;
   // q[0] = q1 * norm;
@@ -105,7 +110,7 @@ void MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy, 
 
 // Similar to Madgwick scheme but uses proportional and integral filtering on the error between estimated reference vectors and
 // measured ones.
-void MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float quaternion[])
+void MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float quaternion[], float deltaTime)
 {
   // float q1 = q[0], q2 = q[1], q3 = q[2], q4 = q[3];   // short name local variable for readability
   float q1 = quaternion[0], q2 = quaternion[1], q3 = quaternion[2], q4 = quaternion[3];   // short name local variable for readability; uses passed in array
@@ -183,10 +188,16 @@ void MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy, fl
   pa = q2;
   pb = q3;
   pc = q4;
-  q1 = q1 + (-q2 * gx - q3 * gy - q4 * gz) * (0.5f * deltat);
-  q2 = pa + (q1 * gx + pb * gz - pc * gy) * (0.5f * deltat);
-  q3 = pb + (q1 * gy - pa * gz + pc * gx) * (0.5f * deltat);
-  q4 = pc + (q1 * gz + pa * gy - pb * gx) * (0.5f * deltat);
+//  q1 = q1 + (-q2 * gx - q3 * gy - q4 * gz) * (0.5f * deltat);
+//  q2 = pa + (q1 * gx + pb * gz - pc * gy) * (0.5f * deltat);
+//  q3 = pb + (q1 * gy - pa * gz + pc * gx) * (0.5f * deltat);
+//  q4 = pc + (q1 * gz + pa * gy - pb * gx) * (0.5f * deltat);
+
+q1 = q1 + (-q2 * gx - q3 * gy - q4 * gz) * (0.5f * deltaTime);
+  q2 = pa + (q1 * gx + pb * gz - pc * gy) * (0.5f * deltaTime);
+  q3 = pb + (q1 * gy - pa * gz + pc * gx) * (0.5f * deltaTime);
+  q4 = pc + (q1 * gz + pa * gy - pb * gx) * (0.5f * deltaTime);
+  
 
   // Normalise quaternion
   norm = sqrtf(q1 * q1 + q2 * q2 + q3 * q3 + q4 * q4);
