@@ -1,7 +1,3 @@
-//TODO: calibration serial command to calibration - acc/gyro seprataely and mag separately
-//write calibration data to EEPROM
-//update check for NAN from readaccelbias to other read funcs
-
 /*
   Marcin Pączkowski
 
