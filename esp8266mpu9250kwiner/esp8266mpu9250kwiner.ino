@@ -686,7 +686,8 @@ void readAllSensors() {
   //  sum = 0;
 }
 
-void myinthandler()
+//see https://github.com/esp8266/Arduino/issues/1403
+void ICACHE_RAM_ATTR myinthandler()
 {
   newData = true;
 }
