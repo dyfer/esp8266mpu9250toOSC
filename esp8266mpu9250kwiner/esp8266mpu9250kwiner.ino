@@ -429,7 +429,7 @@ int receivePort = 8000;
 int sendPort = receivePort + 100; //different port for sending... workaround; works with dark (newer?) boards
 
 //------------- SET VERSION NUMBER ------------
-String version = "20forIMU9250";
+String version = "2018.07.IMU9250.ramIntFix";
 //------------------------------------
 
 boolean useMDNS = false; //for client mode, testing with off for performance reasons
@@ -2966,6 +2966,8 @@ void setup() {
     Serial.print("Y-Axis sensitivity adjustment value "); Serial.println(magCalibration[1], 2);
     Serial.print("Z-Axis sensitivity adjustment value "); Serial.println(magCalibration[2], 2);
     //    }
+
+    Serial.print("\nfirmware version: "); Serial.println(version);
 
     attachInterrupt(intPin, myinthandler, RISING);  // define interrupt for INT pin output of MPU9250
 
