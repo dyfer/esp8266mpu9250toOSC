@@ -8,6 +8,11 @@
   code ported from Kris Winer repository
 
   //-----------------
+  Libraries (from the Library Manager):
+  //-----------------
+  - OSC
+
+  //-----------------
   Hardware:
   //----------------
 
