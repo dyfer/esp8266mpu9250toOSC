@@ -2109,7 +2109,7 @@ void setIP(OSCMessage &msg) {
     writeIP(addr0, addr1, addr2, addr3);
   } else {
     OSCMessage msgOut("/ip");
-    msgOut.add(String(destIP).c_str());
+    msgOut.add(destIP.toString().c_str());
     Udp.beginPacket(destIP, destPort);
     msgOut.send(Udp);
     Udp.endPacket();
