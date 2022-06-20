@@ -244,7 +244,7 @@
 #define FIFO_COUNTL      0x73
 #define FIFO_R_W         0x74
 #define WHO_AM_I_MPU9250 0x75 // Should return 0x71
-#define WHO_AM_I_MPU9250_VALUE 0x73 // to be returned by the above - for the GY9250 board I have
+#define WHO_AM_I_MPU9250_VALUE 0x73 // to be returned by the above - for the GY9250 board I have  it returns 0x73; for older 6050 board 0x68 (but it doesn't work!)
 // #define WHO_AM_I_MPU9250_VALUE 0x71 // to be returned by the above - deefault in the Kris Winer's code
 #define XA_OFFSET_H      0x77
 #define XA_OFFSET_L      0x78
@@ -588,6 +588,7 @@ void readAllSensors() {
     gy = (float)MPU9250Data[5] * gRes;
     gz = (float)MPU9250Data[6] * gRes;
 
+
     readMagData(magCount);  // Read the x/y/z adc values
 
     // Calculate the magnetometer values in milliGauss
@@ -601,23 +602,24 @@ void readAllSensors() {
       my *= magScale[1];
       mz *= magScale[2];
     }
-
-    readCount ++;
-    if ((millis() - readLastSecond) > 1000) { //update once per second
-      readRate = readCount;
-      readLastSecond = millis();
-//      Serial.print("mx: "); Serial.println(mx);
-//      Serial.print("q[0]: "); Serial.println(q[0]);
-      readCount = 0;
-    }
   }
 
-    Now = micros();
-    deltat = ((Now - lastUpdate) / 1000000.0f); // set integration time by time elapsed since last filter update - this needs to be passed to the filter
-    lastUpdate = Now;
-  
-    sum += deltat; // sum for averaging filter update rate
-//   sumCount++;
+  readCount ++;
+  if ((millis() - readLastSecond) > 1000) { //update once per second
+    readRate = readCount;
+    readLastSecond = millis();
+    //      Serial.print("mx: "); Serial.println(mx);
+    //      Serial.print("q[0]: "); Serial.println(q[0]);
+    readCount = 0;
+  }
+
+
+  Now = micros();
+  deltat = ((Now - lastUpdate) / 1000000.0f); // set integration time by time elapsed since last filter update - this needs to be passed to the filter
+  lastUpdate = Now;
+
+  sum += deltat; // sum for averaging filter update rate
+  //   sumCount++;
 
   // Sensors x (y)-axis of the accelerometer/gyro is aligned with the y (x)-axis of the magnetometer;
   // the magnetometer z-axis (+ down) is misaligned with z-axis (+ up) of accelerometer and gyro!
@@ -664,12 +666,12 @@ void readAllSensors() {
   pitch = -asinf(a32);
   roll  = atan2f(a31, a33);
   yaw   = atan2f(a12, a22);
-//  pitch *= 180.0f / PI; //don't convert to degrees
-//  yaw   *= 180.0f / PI; //don't convert to degrees
+  //  pitch *= 180.0f / PI; //don't convert to degrees
+  //  yaw   *= 180.0f / PI; //don't convert to degrees
   //    yaw   += 13.8f; // Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
-//  if (yaw < 0) yaw   += 360.0f; // Ensure yaw stays between 0 and 360
-    if (yaw < 0) yaw   += 2*PI; // Ensure yaw stays between 0 and 2PI
-//  roll  *= 180.0f / PI; //don't convert to degrees
+  //  if (yaw < 0) yaw   += 360.0f; // Ensure yaw stays between 0 and 360
+  if (yaw < 0) yaw   += 2 * PI; // Ensure yaw stays between 0 and 2PI
+  //  roll  *= 180.0f / PI; //don't convert to degrees
   lin_ax = ax + a31;
   lin_ay = ay + a32;
   lin_az = az - a33;
@@ -2155,46 +2157,46 @@ void handleRoot() {
 
   snprintf ( temp, 2000,
              "<!DOCTYPE HTML PUBLIC '-//IETF//DTD HTML//EN'>\
-		<html>\
-		<head>\
-		<title>%s - WiFi configuration</title>\
-		</head>\
-		<body>\
-		<h1>WiFi accelerometer configuration</h1>\
-		Device name: <b>%s</b><br>\
-		Device MAC: <b>%s</b><br><br>\
-		Set network configuration:<br>\
-		<form>\
-		SSID: <input type='text' name='ssid' value='%s'><br>\
-		Password: <input type='text' name='pwd' value='%s'><br>\
-		<input type='submit' value='Change network settings' formaction='network'>\
-		</form>\
-		Change device name (use no spaces):<br>\
-		<form>\
-		Device name: <input type='text' name='name' value='%s'>\
-		<input type='submit' value='Change name'formaction='name'>\
-		</form>\
-		Set deistination IP (also available through OSC):<br>\
-		<form>\
-		<input type='text' name='ip0' value='%i'>.\
-		<input type='text' name='ip1' value='%i'>.\
-		<input type='text' name='ip2' value='%i'>.\
-		<input type='text' name='ip3' value='%i'>\
-		<input type='submit' value='Change IP'formaction='ip'>\
-		</form>\
-		Set destination port (also available through OSC):<br>\
-		<form>\
-		<input type='text' name='port' value='%i'>\
-		<input type='submit' value='Change port'formaction='port'>\
-		</form>\
-		<br>\
-		Input voltage: %sV<br>\
-		<br>\
-		<form>\
-		<input type='submit' value='Reboot' formaction='reboot'>\
-		</form>\
-		</body>\
-		</html>",
+  		<html>\
+  		<head>\
+  		<title>%s - WiFi configuration</title>\
+  		</head>\
+  		<body>\
+  		<h1>WiFi accelerometer configuration</h1>\
+  		Device name: <b>%s</b><br>\
+  		Device MAC: <b>%s</b><br><br>\
+  		Set network configuration:<br>\
+  		<form>\
+  		SSID: <input type='text' name='ssid' value='%s'><br>\
+  		Password: <input type='text' name='pwd' value='%s'><br>\
+  		<input type='submit' value='Change network settings' formaction='network'>\
+  		</form>\
+  		Change device name (use no spaces):<br>\
+  		<form>\
+  		Device name: <input type='text' name='name' value='%s'>\
+  		<input type='submit' value='Change name'formaction='name'>\
+  		</form>\
+  		Set deistination IP (also available through OSC):<br>\
+  		<form>\
+  		<input type='text' name='ip0' value='%i'>.\
+  		<input type='text' name='ip1' value='%i'>.\
+  		<input type='text' name='ip2' value='%i'>.\
+  		<input type='text' name='ip3' value='%i'>\
+  		<input type='submit' value='Change IP'formaction='ip'>\
+  		</form>\
+  		Set destination port (also available through OSC):<br>\
+  		<form>\
+  		<input type='text' name='port' value='%i'>\
+  		<input type='submit' value='Change port'formaction='port'>\
+  		</form>\
+  		<br>\
+  		Input voltage: %sV<br>\
+  		<br>\
+  		<form>\
+  		<input type='submit' value='Reboot' formaction='reboot'>\
+  		</form>\
+  		</body>\
+  		</html>",
              devName.c_str(), devName.c_str(), macStr.c_str(), ssid.c_str(), password.c_str(), devName.c_str(),
              destIP[0], destIP[1], destIP[2], destIP[3], destPort, String(readVoltage()).c_str()
            );
@@ -2221,7 +2223,7 @@ void handleNetwork() {
 
   //  digitalWrite(led, state);
   webServer.send(200, "text/html", String("<p>SSID and password written to the internal memory successfully.</p>\
-	<p>Reboot the device to connect or go back to change more settings.</p>"));
+  	<p>Reboot the device to connect or go back to change more settings.</p>"));
 }
 
 void handleName() {
@@ -2238,19 +2240,19 @@ void handleName() {
 
   //  digitalWrite(led, state);
   webServer.send(200, "text/html", String("<p>Name written to the internal memory successfully.</p>\
-	<p>Reboot the device to connect or go back to change more settings.</p>"));
+  	<p>Reboot the device to connect or go back to change more settings.</p>"));
 }
 
 void handleIP() {
   writeIP(webServer.arg("ip0").toInt(), webServer.arg("ip1").toInt(), webServer.arg("ip2").toInt(), webServer.arg("ip3").toInt());
   webServer.send(200, "text/html", String("<p>Destination IP updated successfully.</p>\
-	<p>Reboot the device to connect or go back to change more settings.</p>"));
+  	<p>Reboot the device to connect or go back to change more settings.</p>"));
 }
 
 void handlePort() {
   writePort(webServer.arg("port").toInt());
   webServer.send(200, "text/html", String("<p>Destination port updated successfully.</p>\
-	<p>Reboot the device to connect or go back to change more settings.</p>"));
+  	<p>Reboot the device to connect or go back to change more settings.</p>"));
 }
 
 
@@ -2947,6 +2949,7 @@ void setup() {
     initMPU9250();
     Serial.println("MPU9250 initialized for active data mode...."); // Initialize device for active mode read of acclerometer, gyroscope, and temperature
 
+
     // Read the WHO_AM_I register of the magnetometer, this is a good test of communication
     byte d = readByte(AK8963_ADDRESS, WHO_AM_I_AK8963);  // Read WHO_AM_I register for AK8963
     Serial.print("AK8963 "); Serial.print("I AM "); Serial.print(d, HEX); Serial.print(" I should be "); Serial.println(0x48, HEX);
@@ -2966,6 +2969,7 @@ void setup() {
     Serial.print("Y-Axis sensitivity adjustment value "); Serial.println(magCalibration[1], 2);
     Serial.print("Z-Axis sensitivity adjustment value "); Serial.println(magCalibration[2], 2);
     //    }
+
 
     Serial.print("\nfirmware version: "); Serial.println(version);
 
