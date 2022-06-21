@@ -24,11 +24,11 @@
   //------------
 
   ESP8266 | MPU-9250
-  V+     Vcc //is be connected directly to the battery, since the board has voltage regulator
+  3V+      Vcc // this can be connected to the 3.3V regulator
   GND      Gnd
-  GPIO 2   SDA
-  GPIO 4   SCL
-  GPIO 15   INT //NOTE: it MAY NOT be 16!
+  GPIO 4   SDA
+  GPIO 2   SCL
+  GPIO 5   INT //NOTE: it MAY NOT be 16!
 
 
   voltage divider for battery
@@ -312,11 +312,9 @@ uint8_t Mmode = 0x06;        // 2 for 8 Hz, 6 for 100 Hz continuous magnetometer
 float aRes, gRes, mRes;      // scale resolutions per LSB for the sensors
 
 // Pin definitions
-int intPin = 15;
+int intPin = 5;
 bool newData = false;
 bool newMagData = false;
-
-int myLed = 13;
 
 uint16_t Pcal[8];         // calibration constants from MS5637 PROM registers
 unsigned char nCRC;       // calculated check sum to ensure PROM integrity
@@ -434,7 +432,7 @@ int receivePort = 8000;
 int sendPort = receivePort + 100; //different port for sending... workaround; works with dark (newer?) boards
 
 //------------- SET VERSION NUMBER ------------
-String version = "2018.07.IMU9250.ramIntFix";
+String version = "2022.06.IMU9250.ramIntFix.newPins";
 //------------------------------------
 
 boolean useMDNS = false; //for client mode, testing with off for performance reasons
@@ -2916,7 +2914,7 @@ void setup() {
   // initialize accelerometer device
   Serial.println("Initializing I2C devices");
   Wire.setClock(400000);//speed up I2C
-  Wire.begin(2, 4); //define which pins are used for I2C: Wire.begin(int sda, int scl)
+  Wire.begin(4, 2); //define which pins are used for I2C: Wire.begin(int sda, int scl)
 
   // I2Cscan();// look for I2C devices on the bus
 
