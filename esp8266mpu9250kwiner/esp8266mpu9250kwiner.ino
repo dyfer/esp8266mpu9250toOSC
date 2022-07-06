@@ -6,6 +6,7 @@
 
   this is modified to work with MPU9250
   code ported from Kris Winer repository
+  https://github.com/kriswiner/MPU9250
 
   //-----------------
   Libraries (from the Library Manager):
