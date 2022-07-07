@@ -8,7 +8,7 @@ OSCFunc.trace(false)
 
 // sound test
 s.boot;
-x.free; x = {PinkNoise.ar(-12.dbamp)}.play(outbus: 0);
+x.free; x = {PinkNoise.ar(-12.dbamp ! 2)}.play(outbus: 0);
 x.free;
 
 
@@ -130,7 +130,7 @@ Server.default.boot;
 	var rate = ~buses[\accY].kr.linlin(0, 1, -12, 12);
 	var rateDispersion = ~buses[\accZ].kr.linlin(0, 1, 8, 0);
 	var amp = ~buses[\accY].kr.linlin(-1, -0.2, -30, -3).dbamp;
-	rate = rate + TRand.ar(rateDispersion.neg, rateDispersion, trig).poll;
+	rate = rate + TRand.ar(rateDispersion.neg, rateDispersion, trig);
 	rate = rate.midiratio;
 	GrainBuf.ar(2, trig, ~grainFreq.max(0.001).reciprocal * ~overlap, ~buffer, rate, ~buses[\accX].kr.linlin(-1, 1, 0, 1), pan: 0) * amp
 }.play
